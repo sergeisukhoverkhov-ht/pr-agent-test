@@ -3,17 +3,18 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	_ "github.com/lib/pq"
 )
 
 var (
-	users = map[string]string{}
+	usersMu = &sync.RWMutex{}
+	users   = map[string]string{}
 )
 
 func loginHandler(db *sql.DB) http.HandlerFunc {
@@ -21,8 +22,8 @@ func loginHandler(db *sql.DB) http.HandlerFunc {
 		username := r.FormValue("username")
 		password := r.FormValue("password")
 
-		query := fmt.Sprintf(`SELECT id FROM users WHERE username='%s' AND password='%s'`, username, password)
-		row := db.QueryRow(query)
+		query := `SELECT id FROM users WHERE username=$1 AND password=$2`
+		row := db.QueryRow(query, username, password)
 
 		var id int
 		if err := row.Scan(&id); err != nil {
@@ -42,9 +43,11 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 	username := r.FormValue("username")
 	password := r.FormValue("password")
 
+	usersMu.Lock()
 	users[username] = password
+	usersMu.Unlock()
 
-	log.Printf("Registered user: %s, password: %s\n", username, password)
+	log.Printf("Registered user: %s\n", username)
 	w.Write([]byte("register success"))
 }
 
@@ -70,7 +73,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	log.Printf("DB connection string: %s", os.Getenv("PG_CONN_STR"))
+	log.Printf("DB connection established")
 
 	http.HandleFunc("/register", registerHandler)
 	http.HandleFunc("/login", loginHandler(db))
@@ -78,5 +81,7 @@ func main() {
 	http.HandleFunc("/debug_env", debugEnvHandler)
 
 	log.Println("Listening on :8080")
-	http.ListenAndServe(":8080", nil)
+	if err := http.ListenAndServe(":8080", nil); err != nil {
+		log.Fatalf("Server failed: %v", err)
+	}
 }
