@@ -10,11 +10,12 @@ import (
 	"time"
 
 	_ "github.com/lib/pq"
+	"golang.org/x/crypto/bcrypt"
 )
 
 var (
 	usersMu = &sync.RWMutex{}
-	users   = map[string]string{}
+	users   = map[string][]byte{}
 )
 
 func loginHandler(db *sql.DB) http.HandlerFunc {
@@ -22,7 +23,12 @@ func loginHandler(db *sql.DB) http.HandlerFunc {
 		username := r.FormValue("username")
 		password := r.FormValue("password")
 
-		query := `SELECT id FROM users WHERE username=$1 AND password=$2`
+		if username == "" || password == "" {
+			http.Error(w, "username and password required", http.StatusBadRequest)
+			return
+		}
+
+		query := `SELECT id FROM users WHERE username=$1 AND password_hash=$2`
 		row := db.QueryRow(query, username, password)
 
 		var id int
@@ -43,11 +49,17 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 	username := r.FormValue("username")
 	password := r.FormValue("password")
 
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
 	usersMu.Lock()
-	users[username] = password
+	users[username] = hashedPassword
 	usersMu.Unlock()
 
-	log.Printf("Registered user: %s\n", username)
+	log.Printf("New user registered")
 	w.Write([]byte("register success"))
 }
 
