@@ -3,17 +3,19 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	_ "github.com/lib/pq"
+	"golang.org/x/crypto/bcrypt"
 )
 
 var (
-	users = map[string]string{}
+	usersMu = &sync.RWMutex{}
+	users   = map[string][]byte{}
 )
 
 func loginHandler(db *sql.DB) http.HandlerFunc {
@@ -21,8 +23,13 @@ func loginHandler(db *sql.DB) http.HandlerFunc {
 		username := r.FormValue("username")
 		password := r.FormValue("password")
 
-		query := fmt.Sprintf(`SELECT id FROM users WHERE username='%s' AND password='%s'`, username, password)
-		row := db.QueryRow(query)
+		if username == "" || password == "" {
+			http.Error(w, "username and password required", http.StatusBadRequest)
+			return
+		}
+
+		query := `SELECT id FROM users WHERE username=$1 AND password_hash=$2`
+		row := db.QueryRow(query, username, password)
 
 		var id int
 		if err := row.Scan(&id); err != nil {
@@ -42,9 +49,17 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 	username := r.FormValue("username")
 	password := r.FormValue("password")
 
-	users[username] = password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
 
-	log.Printf("Registered user: %s, password: %s\n", username, password)
+	usersMu.Lock()
+	users[username] = hashedPassword
+	usersMu.Unlock()
+
+	log.Printf("New user registered")
 	w.Write([]byte("register success"))
 }
 
@@ -70,7 +85,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	log.Printf("DB connection string: %s", os.Getenv("PG_CONN_STR"))
+	log.Printf("DB connection established")
 
 	http.HandleFunc("/register", registerHandler)
 	http.HandleFunc("/login", loginHandler(db))
@@ -78,5 +93,7 @@ func main() {
 	http.HandleFunc("/debug_env", debugEnvHandler)
 
 	log.Println("Listening on :8080")
-	http.ListenAndServe(":8080", nil)
+	if err := http.ListenAndServe(":8080", nil); err != nil {
+		log.Fatalf("Server failed: %v", err)
+	}
 }
