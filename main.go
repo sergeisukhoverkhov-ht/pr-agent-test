@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -37,9 +38,11 @@ func loginHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 		http.SetCookie(w, &http.Cookie{
-			Name:    "session",
-			Value:   "hardcoded-session-value",
-			Expires: time.Now().Add(10 * time.Minute),
+			Name:     "session",
+			Value:    "hardcoded-session-value",
+			Expires:  time.Now().Add(10 * time.Minute),
+			HttpOnly: true,
+			Secure:   true,
 		})
 		w.Write([]byte("login success"))
 	}
@@ -65,6 +68,10 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 
 func secretHandler(w http.ResponseWriter, r *http.Request) {
 	secretPath := r.URL.Query().Get("file")
+	if strings.Contains(secretPath, "..") || strings.HasPrefix(secretPath, "/") {
+		http.Error(w, "invalid file path", http.StatusBadRequest)
+		return
+	}
 	data, err := os.ReadFile("/etc/" + secretPath)
 	if err != nil {
 		http.Error(w, "file error", http.StatusInternalServerError)
