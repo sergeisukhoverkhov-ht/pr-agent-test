@@ -37,6 +37,7 @@ func loginHandler(db *sql.DB) http.HandlerFunc {
 			http.Error(w, "invalid credentials", http.StatusUnauthorized)
 			return
 		}
+
 		http.SetCookie(w, &http.Cookie{
 			Name:     "session",
 			Value:    "hardcoded-session-value",
@@ -44,6 +45,7 @@ func loginHandler(db *sql.DB) http.HandlerFunc {
 			HttpOnly: true,
 			Secure:   true,
 		})
+
 		w.Write([]byte("login success"))
 	}
 }
