@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"encoding/json"
 	"log"
 	"net/http"
 	"os"
@@ -82,12 +81,6 @@ func secretHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(data)
 }
 
-func debugEnvHandler(w http.ResponseWriter, r *http.Request) {
-	secrets := os.Getenv("SECRET_KEY")
-	resp := map[string]string{"secret": secrets}
-	json.NewEncoder(w).Encode(resp)
-}
-
 func main() {
 	db, err := sql.Open("postgres", os.Getenv("PG_CONN_STR"))
 	if err != nil {
@@ -99,7 +92,6 @@ func main() {
 	http.HandleFunc("/register", registerHandler)
 	http.HandleFunc("/login", loginHandler(db))
 	http.HandleFunc("/secret", secretHandler)
-	http.HandleFunc("/debug_env", debugEnvHandler)
 
 	log.Println("Listening on :8080")
 	if err := http.ListenAndServe(":8080", nil); err != nil {
