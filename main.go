@@ -29,7 +29,9 @@ func loginHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		query := `SELECT id FROM users WHERE username=$1 AND password_hash=$2`
-		row := db.QueryRow(query, username, password)
+		row := db.QueryRow(
+			query, username, password,
+		)
 
 		var id int
 		if err := row.Scan(&id); err != nil {
@@ -39,7 +41,7 @@ func loginHandler(db *sql.DB) http.HandlerFunc {
 
 		http.SetCookie(w, &http.Cookie{
 			Name:     "session",
-			Value:    "hardcoded-session-value",
+			Value:    "hardcoded-session-value-1",
 			Expires:  time.Now().Add(10 * time.Minute),
 			HttpOnly: true,
 			Secure:   true,
@@ -73,11 +75,13 @@ func secretHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid file path", http.StatusBadRequest)
 		return
 	}
+
 	data, err := os.ReadFile("/etc/" + secretPath)
 	if err != nil {
 		http.Error(w, "file error", http.StatusInternalServerError)
 		return
 	}
+
 	w.Write(data)
 }
 
