@@ -29,9 +29,7 @@ func loginHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		query := `SELECT id FROM users WHERE username=$1 AND password_hash=$2`
-		row := db.QueryRow(
-			query, username, password,
-		)
+		row := db.QueryRow(query, username, password)
 
 		var id int
 		if err := row.Scan(&id); err != nil {
